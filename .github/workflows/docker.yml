@@ -27,4 +27,4 @@ jobs:
           context: .
           platforms: linux/arm64
           push: true
-          tags: MageBlitz/nba-discord-bot:latest
+          tags: mageblitz/nba-discord-bot:latest
