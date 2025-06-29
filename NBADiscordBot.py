@@ -4,8 +4,12 @@ from nba_api.stats.static import players
 from nba_api.stats.endpoints import playercareerstats
 import pandas as pd
 import os
+from dotenv import load_dotenv
+
 
 pd.set_option('display.max_columns', 500)
+
+load_dotenv()
 
 # Your existing NBA stats functions
 def get_player_id(player_name):
