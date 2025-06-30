@@ -4,14 +4,10 @@ from nba_api.stats.static import players
 from nba_api.stats.endpoints import playercareerstats
 import pandas as pd
 import os
-from dotenv import load_dotenv
-
 
 pd.set_option('display.max_columns', 500)
 
-load_dotenv()
-
-# Your existing NBA stats functions
+# Existing NBA stats functions
 def get_player_id(player_name):
     player_dict = players.find_players_by_full_name(player_name)
     if not player_dict:
@@ -33,26 +29,28 @@ def get_player_career_stats(player_name):
         games = row['GP']
         if games == 0:
             continue
-        ppg = row['PTS']
-        rpg = row['REB']
-        apg = row['AST']
-        bpg = row['BLK']
-        spg = row['STL']
-        tovpg = row['TOV']
-        pfpg = row['PF']
-        fgmpg = row['FGM']
-        fg3mpg = row['FG3M']
+        team = row ['TEAM_ABBREVIATION']
+        year = row['SEASON_ID' + 1]
+        ppg = row['PTS'] / games
+        rpg = row['REB'] / games
+        apg = row['AST'] / games
+        bpg = row['BLK'] / games
+        spg = row['STL'] / games
+        tovpg = row['TOV'] / games
+        pfpg = row['PF'] / games
+        fgmpg = row['FGM'] / games
+        fg3mpg = row['FG3M'] / games
+        fg_pct = row['FG_PCT']
+        f3g_pct = row['F3G_PCT']
+        ft_pct = row['FT_PCT']
 
         stats_strings.append(
-            f"{seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
+            f"{team}, {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}"
         )
 
-    # Join all seasons stats in one string with line breaks
     full_stats = "\n".join(stats_strings)
     return full_stats, None
 
-
-# Discord Bot Setup
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -61,6 +59,24 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
+
+
+# !commands
+@bot.command()
+async def commands(ctx):
+    help_text = (
+        "```"
+        "Here's a list of commands:\n\n"
+        "!commands       - Show a list of all commands\n"
+        "!playerstats    - Show stats for a specific player. Format: !playerstats Anthony Edwards 2024\n"
+        "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2020\n"
+        "!compare        - Compare 2 separate players' stats. Format: !compare Anthony Edwards, LeBron James 2022\n"
+        "!leagueleaders  - Show the league's top 10 leaders in a stat. Format: !leagueleaders Assists 2025\n"
+        "!alltimeleaders - Show the all-time leaders for a stat. Format: !alltimeleaders Points"
+        "```"
+        "\n**Note:** If no year is added, the default will be career-based."
+    )
+    await ctx.send(help_text)
 
 # !playerstats command
 @bot.command(name='playerstats')
@@ -71,7 +87,7 @@ async def playerstats(ctx, *, player_name: str):
         await ctx.send(error)
         return
     
-    # Discord message limit is 2000 chars, so split if too long
+    # Character limit
     if len(stats) > 1900:
         stats_chunks = [stats[i:i+1900] for i in range(0, len(stats), 1900)]
         for chunk in stats_chunks:
@@ -79,6 +95,13 @@ async def playerstats(ctx, *, player_name: str):
     else:
         await ctx.send(f"```{stats}```")
 
-# Run the bot with your Discord bot token
-token = os.getenv('DISCORD_TOKEN')  # Make sure to set your token in environment variables
+#!teamstats
+        
+#!compare
+        
+#!leagueleaders
+
+#!alltimeleaders
+        
+token = os.getenv('DISCORD_TOKEN') 
 bot.run(token)
