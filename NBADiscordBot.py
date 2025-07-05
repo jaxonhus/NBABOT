@@ -2,6 +2,8 @@ import discord
 from discord.ext import commands
 from nba_api.stats.static import players
 from nba_api.stats.endpoints import playercareerstats
+from nba_api.stats.library.parameters import SeasonAll
+import requests
 import pandas as pd
 import os
 
@@ -18,9 +20,14 @@ def get_player_career_stats(player_name):
     player_id = get_player_id(player_name)
     if not player_id:
         return None, f"Could not find player: {player_name}"
-
-    career = playercareerstats.PlayerCareerStats(player_id=player_id)
-    df = career.get_data_frames()[0]
+    #Adding timeout to API call
+    try:
+        career = playercareerstats.PlayerCareerStats(player_id=player_id)
+        df = career.get_data_frames()[0]
+    except requests.exceptions.Timeout:
+        return None, "Request to API timed out"
+    except Exception as e:
+        return None, f"Error getting stats: {str(e)}"
 
     # Collect stats strings per season
     stats_strings = []
@@ -30,7 +37,6 @@ def get_player_career_stats(player_name):
         if games == 0:
             continue
         team = row ['TEAM_ABBREVIATION']
-        year = row['SEASON_ID' + 1]
         ppg = row['PTS'] / games
         rpg = row['REB'] / games
         apg = row['AST'] / games
