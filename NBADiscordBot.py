@@ -1,9 +1,14 @@
 import discord
-from discord.ext import commands
-from nba_api.stats.static import players
-from nba_api.stats.endpoints import playercareerstats
 import pandas as pd
 import os
+from discord.ext import commands
+from nba_api.stats.static import players
+from nba_api.stats.static import teams
+from nba_api.stats.endpoints import playercareerstats
+from nba_api.stats.endpoints import teamyearbyyearstats
+from nba_api.stats.endpoints import teamdashlineups
+from nba_api.stats.endpoints import leagueleaders
+from nba_api.stats.endpoints import alltimeleadersgrids
 from dotenv import load_dotenv
 
 
@@ -20,7 +25,7 @@ def get_player_id(player_name):
 def get_player_career_stats(player_name):
     player_id = get_player_id(player_name)
     if not player_id:
-        return None, f"Could not find player: {player_name}"
+        return None, f"Could not find {player_name}, Format: !playerstats Nikola Jokic"
 
     career = playercareerstats.PlayerCareerStats(player_id=player_id)
     df = career.get_data_frames()[0]
@@ -51,7 +56,42 @@ def get_player_career_stats(player_name):
     full_stats = "\n".join(stats_strings)
     return full_stats, None
 
+def get_team_id(team_name):
+    team_dict = teams.find_teams_by_nickname(team_name)
+    if not team_dict:
+        return None
+    return team_dict[0]['id']
 
+def get_team_stats(team_name):
+    team_id = get_team_id(team_name)
+    if not team_id:
+        return None, f"Could not find the {team_name}, format: !teamstats Lakers"
+    
+    career = teamyearbyyearstats.TeamYearByYearStats(team_id=team_id)
+    df = career.get_data_frames()[0]
+
+    stats_strings = []
+    for index, row in df.iterrows():
+        team_id = row['TEAM_ID']
+        team_city = row['TEAM_CITY']
+        games = row['GP']
+        year = row['YEAR']
+        wins = row['']
+        losses = row['']
+        win_pct = row['']
+        po_wins = row['']
+        po_losses = row['']
+        ppg = row['PTS'] / games
+        apg = row['AST'] / games
+        rpg = row['REB'] / games
+
+        stats_strings.append(
+            f"{team_id}, {win_pct}, {ppg}, {apg}, {rpg}"
+        )
+    
+
+# !teamroster
+        
 # Discord Bot Setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -79,6 +119,7 @@ async def commands(ctx):
         "!commands       - Show a list of all commands\n"
         "!playerstats    - Show stats for a specific player. Format: !playerstats Anthony Edwards 2024\n"
         "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2020\n"
+        "!team roster"
         "!compare        - Compare 2 separate players' stats. Format: !compare Anthony Edwards, LeBron James 2022\n"
         "!leagueleaders  - Show the league's top 10 leaders in a stat. Format: !leagueleaders Assists 2025\n"
         "!alltimeleaders - Show the all-time leaders for a stat. Format: !alltimeleaders Points"
