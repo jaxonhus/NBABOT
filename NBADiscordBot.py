@@ -1,12 +1,13 @@
 import discord
 import pandas as pd
 import os
+import re
 from discord.ext import commands
 from nba_api.stats.static import players
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import playercareerstats
 from nba_api.stats.endpoints import teamyearbyyearstats
-from nba_api.stats.endpoints import teamdashlineups
+from nba_api.stats.endpoints import commonteamroster
 from nba_api.stats.endpoints import leagueleaders
 from nba_api.stats.endpoints import alltimeleadersgrids
 from dotenv import load_dotenv
@@ -70,6 +71,9 @@ def get_team_stats(team_name):
     career = teamyearbyyearstats.TeamYearByYearStats(team_id=team_id)
     df = career.get_data_frames()[0]
 
+    team_roster = commonteamroster.CommonTeamRoster(team_id = team_id, season= '''user input''')
+
+
     stats_strings = []
     for index, row in df.iterrows():
         team_id = row['TEAM_ID']
@@ -89,9 +93,6 @@ def get_team_stats(team_name):
             f"{team_id}, {win_pct}, {ppg}, {apg}, {rpg}"
         )
     
-
-# !teamroster
-        
 # Discord Bot Setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -117,11 +118,11 @@ async def commands(ctx):
         "```"
         "Here's a list of commands:\n\n"
         "!commands       - Show a list of all commands\n"
-        "!playerstats    - Show stats for a specific player. Format: !playerstats Anthony Edwards 2024\n"
-        "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2020\n"
-        "!team roster"
-        "!compare        - Compare 2 separate players' stats. Format: !compare Anthony Edwards, LeBron James 2022\n"
-        "!leagueleaders  - Show the league's top 10 leaders in a stat. Format: !leagueleaders Assists 2025\n"
+        "!playerstats    - Show stats for a specific player. Format: !playerstats Anthony Edwards 2024-25\n"
+        "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2020-21\n"
+        "!teamroster     - Show the roster for a team. Format: !teamroster Lakers 2024-25"
+        "!compare        - Compare 2 separate players' stats. Format: !compare Michael Jordan, LeBron James\n"
+        "!leagueleaders  - Show the league's top 10 leaders in a stat. Format: !leagueleaders Assists 2024-25\n"
         "!alltimeleaders - Show the all-time leaders for a stat. Format: !alltimeleaders Points"
         "```"
         "\n**Note:** If no year is added, the default will be career-based."
@@ -130,9 +131,19 @@ async def commands(ctx):
 
 # !playerstats
 @bot.command(name='playerstats')
-async def playerstats(ctx, *, player_name: str):
-    await ctx.send(f"Fetching stats for {player_name}...")
+async def playerstats(ctx, *, args: str):
+    parts = args.rsplit(maxsplit=1)
+    if re.match(r"\d{4}-\d{2}", parts[-1]):
+        player_name = parts[0]
+        season = parts[-1]
+    else:
+        player_name = args 
+        season = None
+
+    await ctx.send(f"Getting stats for {player_name}")
+
     stats, error = get_player_career_stats(player_name)
+
     if error:
         await ctx.send(error)
         return
@@ -155,12 +166,15 @@ async def teamstats(ctx, *, team_name: str):
         await ctx.send(error)
         return
 ''' 
+
+# !teamroster
+
 # !compare
-    #test
+
 # !leagueleaders
     
 # !alltimeleaders
 
 # Run the bot with your Discord bot token
-token = os.getenv('DISCORD_TOKEN')  # Make sure to set your token in environment variables
+token = os.getenv('DISCORD_TOKEN')
 bot.run(token)
