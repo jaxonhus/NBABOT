@@ -113,7 +113,7 @@ def get_team_stats(team_name, season = None):
         rpg = round(row['REB'] / games, 1)
         apg = round(row['AST'] / games, 1)
 
-        if po_losses and po_wins == 0:
+        if po_losses == 0 and po_wins == 0:
             stats_strings.append(
             f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
             f"PPG {ppg}, APG {apg}, RPG {rpg}, Did not make the Playoffs"
