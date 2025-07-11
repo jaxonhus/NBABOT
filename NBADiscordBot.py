@@ -25,6 +25,12 @@ def get_player_id(player_name):
         return None
     return player_dict[0]['id']
 
+def get_team_id(team_name):
+    team_dict = teams.find_teams_by_nickname(team_name)
+    if not team_dict:
+        return None
+    return team_dict[0]['id']
+
 def get_player_career_stats(player_name, season = None):
     player_id = get_player_id(player_name)
     if not player_id:
@@ -66,16 +72,6 @@ def get_player_career_stats(player_name, season = None):
         stats_strings.append(
             f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
         )
-
-    # Join all seasons stats in one string with line breaks
-    full_stats = "\n".join(stats_strings)
-    return full_stats, None
-
-def get_team_id(team_name):
-    team_dict = teams.find_teams_by_nickname(team_name)
-    if not team_dict:
-        return None
-    return team_dict[0]['id']
 
 def get_team_stats(team_name, season = None):
     team_id = get_team_id(team_name)
@@ -204,9 +200,9 @@ async def playerstats(ctx, *, args: str):
         season = None
 
     if season:
-        await ctx.send(f"Getting stats for {player_name} in {season}")
+        await ctx.send(f"Getting stats for {player_name} in {season}...")
     else:
-        await ctx.send(f"Getting career stats for {player_name}")
+        await ctx.send(f"Getting career stats for {player_name}...")
 
     stats, error = get_player_career_stats(player_name, season)
 
@@ -229,13 +225,12 @@ async def teamstats(ctx, *, args: str):
         team_name = parts[0]
         season = parts[-1]
     else:
-        team_name = args 
-        season = None, f"Invalid Season"
+        await ctx.send(f"Please input a valid format. Format: !teamstats Lakers 2025")
 
     if season:
-        await ctx.send(f"Getting stats for {team_name} in {season}")
+        await ctx.send(f"Getting stats for {team_name} in {season}...")
     else:
-        await ctx.send(f"Please input a season. Format: !teamstats {team_name} 2025")
+        await ctx.send(f"Please input a season. Format: !teamstats Lakers 2025")
 
     stats, error = get_team_stats(team_name, season)
 
