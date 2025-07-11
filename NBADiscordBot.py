@@ -35,9 +35,15 @@ def get_player_career_stats(player_name, season = None):
     df = df.sort_values(by='SEASON_ID')
 
     if season:
-        df = df[df['SEASON_ID'] == season]
-        if df.empty:
-            return None, f"Could not find stats for {player_name} in {season}. Format: !playerstats Lebron James 2025"
+        if not re.match(r"^\d{4}$", season):
+            return None, f"Invalid season format: {season}. Expected 4-digit year like 2025."
+        season_id = f"{int(season)-1}-{str(season)[-2:]}"
+        df = df[df['YEAR'] == season_id]
+
+        if df.empty and season:
+            return None, f"Could not find stats for {player_name} in {season}."
+    else:
+        return None
             
     # Collect stats strings per season
     stats_strings = []
