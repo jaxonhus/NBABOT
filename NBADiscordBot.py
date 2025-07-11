@@ -16,6 +16,8 @@ from dotenv import load_dotenv
 pd.set_option('display.max_columns', 500)
 
 load_dotenv()
+token = os.getenv('DISCORD_TOKEN')
+
 
 def get_player_id(player_name):
     player_dict = players.find_players_by_full_name(player_name)
@@ -23,14 +25,20 @@ def get_player_id(player_name):
         return None
     return player_dict[0]['id']
 
-def get_player_career_stats(player_name):
+def get_player_career_stats(player_name, season = None):
     player_id = get_player_id(player_name)
     if not player_id:
-        return None, f"Could not find {player_name}, Format: !playerstats Nikola Jokic"
+        return None, f"Could not find {player_name}"
 
     career = playercareerstats.PlayerCareerStats(player_id=player_id)
     df = career.get_data_frames()[0]
+    df = df.sort_values(by='SEASON_ID')
 
+    if season:
+        df = df[df['SEASON_ID'] == season]
+        if df.empty:
+            return None, f"Could not find stats for {player_name} in {season}. Format: !playerstats Lebron James 2025"
+            
     # Collect stats strings per season
     stats_strings = []
     for index, row in df.iterrows():
@@ -63,16 +71,24 @@ def get_team_id(team_name):
         return None
     return team_dict[0]['id']
 
-def get_team_stats(team_name):
+def get_team_stats(team_name, season = None):
     team_id = get_team_id(team_name)
     if not team_id:
-        return None, f"Could not find the {team_name}, format: !teamstats Lakers"
+        return None, f"Could not find the {team_name}, format: !teamstats Lakers 2025"
     
     career = teamyearbyyearstats.TeamYearByYearStats(team_id=team_id)
     df = career.get_data_frames()[0]
+    df = df.sort_values(by='YEAR')
 
-    team_roster = commonteamroster.CommonTeamRoster(team_id = team_id, season= '''user input''')
-
+    if season:
+        match_year = season_to_year(season)
+        if not match_year:
+            return None, f"Invalid season format: {season}. Expected 4-digit year like 2025."
+        df = df[df['YEAR'] == match_year]
+        if df.empty:
+            return None, f"Could not find stats for {team_name} in {season}."
+    else:
+        return None, f"Please specify a season year like 2025."
 
     stats_strings = []
     for index, row in df.iterrows():
@@ -80,19 +96,56 @@ def get_team_stats(team_name):
         team_city = row['TEAM_CITY']
         games = row['GP']
         year = row['YEAR']
-        wins = row['']
-        losses = row['']
-        win_pct = row['']
-        po_wins = row['']
-        po_losses = row['']
-        ppg = row['PTS'] / games
-        apg = row['AST'] / games
-        rpg = row['REB'] / games
+        wins = row['WINS']
+        losses = row['LOSSES']
+        win_pct = row['WIN_PCT']
+        po_wins = row['PO_WINS']
+        po_losses = row['PO_LOSSES']
+        finals_app = row['NBA_FINALS_APPEARANCE']
+        ppg = round(row['PTS'] / games, 1)
+        rpg = round(row['REB'] / games, 1)
+        apg = round(row['AST'] / games, 1)
 
-        stats_strings.append(
-            f"{team_id}, {win_pct}, {ppg}, {apg}, {rpg}"
+        if po_losses and po_wins == 0:
+            stats_strings.append(
+            f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
+            f"PPG {ppg}, APG {apg}, RPG {rpg}, Did not make the Playoffs"
         )
+        elif po_wins < 4:
+            stats_strings.append(
+            f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
+            f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Eliminated in the First Round"
+        )
+        elif po_wins < 8:
+            stats_strings.append(
+            f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
+            f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Eliminated in the Second Round"
+        )
+        elif po_wins < 12:
+            stats_strings.append(
+            f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
+            f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Eliminated in the Conference Finals"
+        )
+        else: 
+            stats_strings.append(
+            f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
+            f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Made the Finals"
+        )
+            
+    full_stats = "\n".join(stats_strings)
+    return full_stats, None
     
+def season_to_year(season: str) -> str:
+    if not re.match(r"\d{4}", season):
+        return None
+    short_year = season[-2:]
+    yy = int(short_year)
+    if yy < 40:
+        century = 2000
+    else: century = 1900
+    full_year = century + yy
+    return str(full_year)
+
 # Discord Bot Setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -118,37 +171,41 @@ async def commands(ctx):
         "```"
         "Here's a list of commands:\n\n"
         "!commands       - Show a list of all commands\n"
-        "!playerstats    - Show stats for a specific player. Format: !playerstats Anthony Edwards 2024-25\n"
-        "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2020-21\n"
-        "!teamroster     - Show the roster for a team. Format: !teamroster Lakers 2024-25"
+        "!playerstats    - Show stats for a specific player. Format: !playerstats Anthony Edwards 2025\n"
+        "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2025\n"
+        "!teamroster     - Show the roster for a team. Format: !teamroster Lakers 2025"
         "!compare        - Compare 2 separate players' stats. Format: !compare Michael Jordan, LeBron James\n"
-        "!leagueleaders  - Show the league's top 10 leaders in a stat. Format: !leagueleaders Assists 2024-25\n"
+        "!leagueleaders  - Show the league's top 10 leaders in a stat. Format: !leagueleaders Assists 2025\n"
         "!alltimeleaders - Show the all-time leaders for a stat. Format: !alltimeleaders Points"
         "```"
         "\n**Note:** If no year is added, the default will be career-based."
     )
     await ctx.send(help_text)
 
+#use re.match to take the last 2 digits of the year row in the data, add "20" + shortened year if under 40. If over 40, add "19". somehow combine those two digits and match them in the user input year to correlate the year
+
 # !playerstats
 @bot.command(name='playerstats')
 async def playerstats(ctx, *, args: str):
     parts = args.rsplit(maxsplit=1)
-    if re.match(r"\d{4}-\d{2}", parts[-1]):
+    if re.match(r"\d{4}", parts[-1]):
         player_name = parts[0]
         season = parts[-1]
     else:
         player_name = args 
         season = None
 
-    await ctx.send(f"Getting stats for {player_name}")
+    if season:
+        await ctx.send(f"Getting stats for {player_name} in {season}")
+    else:
+        await ctx.send(f"Getting career stats for {player_name}")
 
-    stats, error = get_player_career_stats(player_name)
+    stats, error = get_player_career_stats(player_name, season)
 
     if error:
         await ctx.send(error)
         return
-
-    # Discord message limit is 2000 chars, so split if too long
+    
     if len(stats) > 1900:
         stats_chunks = [stats[i:i+1900] for i in range(0, len(stats), 1900)]
         for chunk in stats_chunks:
@@ -157,24 +214,45 @@ async def playerstats(ctx, *, args: str):
         await ctx.send(f"```{stats}```")
 
 # !teamstats
-'''
 @bot.command(name = 'teamstats')
-async def teamstats(ctx, *, team_name: str):
-    await ctx.send(f"Fetching stats for the {team_name}")
-    stats, error = get_team_stats(team_name)
-    if error:
+async def teamstats(ctx, *, args: str):
+    parts = args.rsplit(maxsplit=1)
+    if re.match(r"\d{4}", parts[-1]):
+        team_name = parts[0]
+        season = parts[-1]
+    else:
+        team_name = args 
+        season = None, f"Invalid Season"
+
+    if season:
+        await ctx.send(f"Getting stats for {team_name} in {season}")
+    else:
+        await ctx.send(f"Please input a season. Format: !teamstats {team_name} 2025")
+
+    stats, error = get_team_stats(team_name, season)
+
+    if error: 
         await ctx.send(error)
         return
-''' 
+
+    if len(stats) > 1900:
+        stats_chunks = [stats[i:i+1900] for i in range(0, len(stats), 1900)]
+        for chunk in stats_chunks:
+            await ctx.send(f"```{chunk}```")
+    else:
+        await ctx.send(f"```{stats}```")
 
 # !teamroster
 
 # !compare
 
 # !leagueleaders
-    
+        
 # !alltimeleaders
 
 # Run the bot with your Discord bot token
-token = os.getenv('DISCORD_TOKEN')
-bot.run(token)
+print
+if token:
+    bot.run(token)
+else: 
+    print("Could not find token")

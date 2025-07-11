@@ -1,0 +1,14 @@
+import re
+
+seasonId = "2004-05"
+
+short_year = seasonId[-2:]
+yy = int(short_year)
+if yy < 40:
+    century = 2000
+else: century = 1900
+
+full_year = century + yy
+
+print(full_year)
+
