@@ -81,10 +81,11 @@ def get_team_stats(team_name, season = None):
     df = df.sort_values(by='YEAR')
 
     if season:
-        match_year = season_to_year(season)
-        if not match_year:
+        if not re.match(r"^\d{4}$", season):
             return None, f"Invalid season format: {season}. Expected 4-digit year like 2025."
-        df = df[df['YEAR'] == match_year]
+        season_id = f"{int(season)-1}-{str(season)[-2:]}"
+        df = df[df['YEAR'] == season_id]
+
         if df.empty:
             return None, f"Could not find stats for {team_name} in {season}."
     else:
@@ -145,6 +146,7 @@ def season_to_year(season: str) -> str:
     else: century = 1900
     full_year = century + yy
     return str(full_year)
+
 
 # Discord Bot Setup
 intents = discord.Intents.default()
