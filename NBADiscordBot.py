@@ -73,6 +73,9 @@ def get_player_career_stats(player_name, season = None):
             f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
         )
 
+    full_stats = "\n".join(stats_strings)
+    return full_stats, None
+
 def get_team_stats(team_name, season = None):
     team_id = get_team_id(team_name)
     if not team_id:
