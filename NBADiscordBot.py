@@ -51,27 +51,27 @@ def get_player_career_stats(player_name, season = None):
     else:
         return None
             
-    # Collect stats strings per season
-    stats_strings = []
-    for index, row in df.iterrows():
-        seasonId = row['SEASON_ID']
-        team_abbr = row['TEAM_ABBREVIATION']
-        games = row['GP']
-        if games == 0:
-            continue
-        ppg = round(row['PTS'] / games, 1)
-        rpg = round(row['REB'] / games, 1)
-        apg = round(row['AST'] / games, 1)
-        bpg = round(row['BLK'] / games, 1)
-        spg = round(row['STL'] / games, 1)
-        tovpg = round(row['TOV'] / games, 1)
-        pfpg = round(row['PF'] / games, 1)
-        fgmpg = round(row['FGM'] / games, 1)
-        fg3mpg = round(row['FG3M'] / games, 1)
+    if not season:
+        stats_strings = []
+        for index, row in df.iterrows():
+            seasonId = row['SEASON_ID']
+            team_abbr = row['TEAM_ABBREVIATION']
+            games = row['GP']
+            if games == 0:
+                continue
+            ppg = round(row['PTS'] / games, 1)
+            rpg = round(row['REB'] / games, 1)
+            apg = round(row['AST'] / games, 1)
+            bpg = round(row['BLK'] / games, 1)
+            spg = round(row['STL'] / games, 1)
+            tovpg = round(row['TOV'] / games, 1)
+            pfpg = round(row['PF'] / games, 1)
+            fgmpg = round(row['FGM'] / games, 1)
+            fg3mpg = round(row['FG3M'] / games, 1)
 
-        stats_strings.append(
-            f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
-        )
+            stats_strings.append(
+                f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
+            )
 
     full_stats = "\n".join(stats_strings)
     return full_stats, None
