@@ -224,7 +224,7 @@ async def teamstats(ctx, *, args: str):
         season = parts[-1]
     else:
         team_name = args 
-        season = (None, f"Invalid Season")
+        season = None
 
     if season:
         await ctx.send(f"Getting stats for {team_name} in {season}")
