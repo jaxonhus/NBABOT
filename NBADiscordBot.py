@@ -162,7 +162,7 @@ async def on_ready():
 @bot.command(name = 'hi')
 async def hi(ctx):
     hi_text = (
-        f"Hello {ctx.author}!"
+        f"Hello {ctx.author}, this is the 10th code update!"
     )
     await ctx.send(hi_text)
 
@@ -224,7 +224,7 @@ async def teamstats(ctx, *, args: str):
         season = parts[-1]
     else:
         team_name = args 
-        season = None, f"Invalid Season"
+        season = (None, f"Invalid Season")
 
     if season:
         await ctx.send(f"Getting stats for {team_name} in {season}")
