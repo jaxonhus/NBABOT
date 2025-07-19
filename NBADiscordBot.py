@@ -25,12 +25,6 @@ def get_player_id(player_name):
         return None
     return player_dict[0]['id']
 
-def get_team_id(team_name):
-    team_dict = teams.find_teams_by_nickname(team_name)
-    if not team_dict:
-        return None
-    return team_dict[0]['id']
-
 def get_player_career_stats(player_name, season = None):
     player_id = get_player_id(player_name)
     if not player_id:
@@ -41,55 +35,59 @@ def get_player_career_stats(player_name, season = None):
     df = df.sort_values(by='SEASON_ID')
 
     if season:
-        if not re.match(r"^\d{4}$", season):
-            return None, f"Invalid season format: {season}. Expected 4-digit year like 2025."
-        season_id = f"{int(season)-1}-{str(season)[-2:]}"
-        df = df[df['YEAR'] == season_id]
+        df = df[df['SEASON_ID'] == season]
+        if df.empty:
+            return None, f"Could not find stats for {player_name} in {season}. Format: !playerstats Lebron James 2025"
 
-        if df.empty and season:
-            return None, f"Could not find stats for {player_name} in {season}."
-    else:
-        return None
-            
-    if not season:
-        stats_strings = []
-        for index, row in df.iterrows():
-            seasonId = row['SEASON_ID']
-            team_abbr = row['TEAM_ABBREVIATION']
-            games = row['GP']
-            if games == 0:
-                continue
-            ppg = round(row['PTS'] / games, 1)
-            rpg = round(row['REB'] / games, 1)
-            apg = round(row['AST'] / games, 1)
-            bpg = round(row['BLK'] / games, 1)
-            spg = round(row['STL'] / games, 1)
-            tovpg = round(row['TOV'] / games, 1)
-            pfpg = round(row['PF'] / games, 1)
-            fgmpg = round(row['FGM'] / games, 1)
-            fg3mpg = round(row['FG3M'] / games, 1)
+    # Collect stats strings per season
+    stats_strings = []
+    for index, row in df.iterrows():
+        seasonId = row['SEASON_ID']
+        team_abbr = row['TEAM_ABBREVIATION']
+        games = row['GP']
+        if games == 0:
+            continue
+        ppg = round(row['PTS'] / games, 1)
+        rpg = round(row['REB'] / games, 1)
+        apg = round(row['AST'] / games, 1)
+        bpg = round(row['BLK'] / games, 1)
+        spg = round(row['STL'] / games, 1)
+        tovpg = round(row['TOV'] / games, 1)
+        pfpg = round(row['PF'] / games, 1)
+        fgmpg = round(row['FGM'] / games, 1)
+        fg3mpg = round(row['FG3M'] / games, 1)
 
-            stats_strings.append(
-                f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
-            )
+        stats_strings.append(
+            f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
+        )
 
+    # Join all seasons stats in one string with line breaks
     full_stats = "\n".join(stats_strings)
     return full_stats, None
+
+def get_team_id(team_name):
+    team_dict = teams.find_teams_by_nickname(team_name)
+    if not team_dict:
+        return None
+    return team_dict[0]['id']
 
 def get_team_stats(team_name, season = None):
     team_id = get_team_id(team_name)
     if not team_id:
         return None, f"Could not find the {team_name}, format: !teamstats Lakers 2025"
-    
+
     career = teamyearbyyearstats.TeamYearByYearStats(team_id=team_id)
     df = career.get_data_frames()[0]
     df = df.sort_values(by='YEAR')
 
     if season:
-        if not re.match(r"^\d{4}$", season):
-            return None, f"Invalid season format: {season}. Expected 4-digit year like 2025."
-        season_id = f"{int(season)-1}-{str(season)[-2:]}"
-        df = df[df['YEAR'] == season_id]
+        match_year = season_to_year(season)
+        if not match_year:
+            if not re.match(r"^\d{4}$", season):
+                return None, f"Invalid season format: {season}. Expected 4-digit year like 2025."
+            df = df[df['YEAR'] == match_year]
+            season_id = f"{int(season)-1}-{str(season)[-2:]}"
+            df = df[df['YEAR'] == season_id]
 
         if df.empty:
             return None, f"Could not find stats for {team_name} in {season}."
@@ -112,7 +110,7 @@ def get_team_stats(team_name, season = None):
         rpg = round(row['REB'] / games, 1)
         apg = round(row['AST'] / games, 1)
 
-        if po_losses == 0 and po_wins == 0:
+        if po_losses and po_wins == 0:
             stats_strings.append(
             f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
             f"PPG {ppg}, APG {apg}, RPG {rpg}, Did not make the Playoffs"
@@ -137,10 +135,10 @@ def get_team_stats(team_name, season = None):
             f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
             f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Made the Finals"
         )
-            
+
     full_stats = "\n".join(stats_strings)
     return full_stats, None
-    
+
 def season_to_year(season: str) -> str:
     if not re.match(r"\d{4}", season):
         return None
@@ -203,16 +201,16 @@ async def playerstats(ctx, *, args: str):
         season = None
 
     if season:
-        await ctx.send(f"Getting stats for {player_name} in {season}...")
+        await ctx.send(f"Getting stats for {player_name} in {season}")
     else:
-        await ctx.send(f"Getting career stats for {player_name}...")
+        await ctx.send(f"Getting career stats for {player_name}")
 
     stats, error = get_player_career_stats(player_name, season)
 
     if error:
         await ctx.send(error)
         return
-    
+
     if len(stats) > 1900:
         stats_chunks = [stats[i:i+1900] for i in range(0, len(stats), 1900)]
         for chunk in stats_chunks:
@@ -228,12 +226,13 @@ async def teamstats(ctx, *, args: str):
         team_name = parts[0]
         season = parts[-1]
     else:
-        await ctx.send(f"Please input a valid format. Format: !teamstats Lakers 2025")
+        team_name = args 
+        season = None, f"Invalid Season"
 
     if season:
-        await ctx.send(f"Getting stats for {team_name} in {season}...")
+        await ctx.send(f"Getting stats for {team_name} in {season}")
     else:
-        await ctx.send(f"Please input a season. Format: !teamstats Lakers 2025")
+        await ctx.send(f"Please input a season. Format: !teamstats {team_name} 2025")
 
     stats, error = get_team_stats(team_name, season)
 
@@ -253,7 +252,7 @@ async def teamstats(ctx, *, args: str):
 # !compare
 
 # !leagueleaders
-        
+
 # !alltimeleaders
 
 # Run the bot with your Discord bot token
