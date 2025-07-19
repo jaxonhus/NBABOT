@@ -2,6 +2,7 @@ import discord
 import pandas as pd
 import os
 import re
+import csv
 from discord.ext import commands
 from nba_api.stats.static import players
 from nba_api.stats.static import teams
@@ -67,7 +68,7 @@ def get_player_career_stats(player_name, season = None):
         fg3mpg = round(row['FG3M'] / games, 1)
 
         stats_strings.append(
-            f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, 3PM {fg3mpg}"
+            f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, FGM {fgmpg} 3PM {fg3mpg}"
         )
 
     # Join all seasons stats in one string with line breaks
@@ -90,18 +91,10 @@ def get_team_stats(team_name, season = None):
     df = df.sort_values(by='YEAR')
 
     if season:
-        match_year = season_to_year(season)
-        if not match_year:
-            if not re.match(r"^\d{4}$", season):
-                return None, f"Invalid season format: {season}. Expected 4-digit year like 2025."
-            df = df[df['YEAR'] == match_year]
-            season_id = f"{int(season)-1}-{str(season)[-2:]}"
-            df = df[df['YEAR'] == season_id]
-
+        season = season_to_year(season)
+        df = df[df['YEAR'] == season]
         if df.empty:
-            return None, f"Could not find stats for {team_name} in {season}."
-    else:
-        return None, f"Please specify a season year like 2025."
+            return None, f"Could not find stats for {team_name} in {season}. Format: !teamstats Lakers 2025"
 
     stats_strings = []
     for index, row in df.iterrows():
@@ -119,7 +112,7 @@ def get_team_stats(team_name, season = None):
         rpg = round(row['REB'] / games, 1)
         apg = round(row['AST'] / games, 1)
 
-        if po_losses and po_wins == 0:
+        if po_losses == 0 and po_wins == 0:
             stats_strings.append(
             f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
             f"PPG {ppg}, APG {apg}, RPG {rpg}, Did not make the Playoffs"
@@ -139,10 +132,15 @@ def get_team_stats(team_name, season = None):
             f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
             f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Eliminated in the Conference Finals"
         )
-        else: 
+        elif po_wins < 16:
             stats_strings.append(
             f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
-            f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Made the Finals"
+            f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Lost in the Finals"
+        )
+        else:
+            stats_strings.append(
+            f"{team_city} {year}: {wins}-{losses} ({win_pct*100:.1f}% win), "
+            f"PPG {ppg}, APG {apg}, RPG {rpg}, Playoffs W-L: {po_wins}-{po_losses}, Won the Championship!"
         )
 
     full_stats = "\n".join(stats_strings)
@@ -162,7 +160,7 @@ async def on_ready():
 @bot.command(name = 'hi')
 async def hi(ctx):
     hi_text = (
-        f"Hello {ctx.author}, this is the 10th code update!"
+        f"Hello {ctx.author}, this is the 12th code update!"
     )
     await ctx.send(hi_text)
 
