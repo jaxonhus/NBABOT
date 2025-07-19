@@ -25,6 +25,14 @@ def get_player_id(player_name):
         return None
     return player_dict[0]['id']
 
+def season_to_year(season: str) -> str:
+    if not re.match(r"^\d{4}$", season):
+        return None
+    full_year = int(season)
+    start_year = full_year - 1
+    end_year_short = str(full_year)[-2:]
+    return f"{start_year}-{end_year_short}"
+
 def get_player_career_stats(player_name, season = None):
     player_id = get_player_id(player_name)
     if not player_id:
@@ -35,6 +43,7 @@ def get_player_career_stats(player_name, season = None):
     df = df.sort_values(by='SEASON_ID')
 
     if season:
+        season = season_to_year(season)
         df = df[df['SEASON_ID'] == season]
         if df.empty:
             return None, f"Could not find stats for {player_name} in {season}. Format: !playerstats Lebron James 2025"
@@ -138,18 +147,6 @@ def get_team_stats(team_name, season = None):
 
     full_stats = "\n".join(stats_strings)
     return full_stats, None
-
-def season_to_year(season: str) -> str:
-    if not re.match(r"\d{4}", season):
-        return None
-    short_year = season[-2:]
-    yy = int(short_year)
-    if yy < 40:
-        century = 2000
-    else: century = 1900
-    full_year = century + yy
-    return str(full_year)
-
 
 # Discord Bot Setup
 intents = discord.Intents.default()
