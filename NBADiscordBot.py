@@ -4,13 +4,8 @@ import os
 import re
 import csv
 from discord.ext import commands
-from nba_api.stats.static import players
-from nba_api.stats.static import teams
-from nba_api.stats.endpoints import playercareerstats
-from nba_api.stats.endpoints import teamyearbyyearstats
-from nba_api.stats.endpoints import commonteamroster
-from nba_api.stats.endpoints import leagueleaders
-from nba_api.stats.endpoints import alltimeleadersgrids
+from nba_api.stats.static import *
+from nba_api.stats.endpoints import *
 from dotenv import load_dotenv
 
 
@@ -68,7 +63,7 @@ def get_player_career_stats(player_name, season = None):
         fg3mpg = round(row['FG3M'] / games, 1)
 
         stats_strings.append(
-            f"{team_abbr} {seasonId}: PPG {ppg}, RPG {rpg}, APG {apg}, BPG {bpg}, SPG {spg}, TO {tovpg}, PF {pfpg}, FGM {fgmpg} 3PM {fg3mpg}"
+            f"{team_abbr} {seasonId}: GP: {games}, PPG: {ppg}, RPG: {rpg}, APG: {apg}, BPG: {bpg}, SPG: {spg}, TO: {tovpg}, PF: {pfpg}, FGM: {fgmpg} 3PM: {fg3mpg}"
         )
 
     # Join all seasons stats in one string with line breaks
@@ -146,6 +141,135 @@ def get_team_stats(team_name, season = None):
     full_stats = "\n".join(stats_strings)
     return full_stats, None
 
+def get_league_leaders(stat: str, season: str = None):
+    stat = stat.lower()
+    
+    league_stats = {
+        "points": "PTS",
+        "assists": "AST",
+        "rebounds": "REB",
+        "blocks": "BLK",
+        "steals": "STL",
+        "turnovers": "TOV",
+        "fg%": "FG_PCT",
+        "fgm": "FGM",
+        "3pm": "FG3M",
+        "ftm": "FTM",
+        "3p%": "FG3_PCT",
+        "ft%": "FT_PCT",
+        "minutes": "MIN"
+    }
+
+    per_game_stats = {
+        "points": "PTS/G",
+        "assists": "AST/G",
+        "rebounds": "REB/G",
+        "blocks": "BLK/G",
+        "steals": "STL/G",
+        "turnovers": "TOV/G",
+        "fgm": "FGM / G",
+        "3pm": "FG3M/G",
+        "ftm": "FTM / G",
+        "minutes": "MIN/G",
+    }
+
+    pct_stats = {
+        "fg%": "FG_PCT",
+        "3p%": "FG3_PCT",
+        "ft%": "FT_PCT",
+    }
+
+    stat_display_names = {
+        "points": "PTS",
+        "assists": "AST",
+        "rebounds": "REB",
+        "blocks": "BLK",
+        "steals": "STL",
+        "turnovers": "TOV",
+        "fg%": "FG%",
+        "fgm": "FGM",
+        "3pm": "3PM",
+        "ftm": "FTM",
+        "3p%": "3P%",
+        "ft%": "FT%",
+        "minutes": "MIN"
+    }
+
+    # Validate stat
+    valid_stats = set(league_stats) | set(per_game_stats) | set(pct_stats)
+    if stat not in valid_stats:
+        return None, f"Invalid stat, use !stathelp to view valid stats."
+
+    # Convert season to season_id
+    season_id = None
+    if season:
+        season_id = season_to_year(season)
+        if not season_id:
+            return None, f"Invalid season format. Please use a 4 digit year like 2025."
+
+    try:
+        leaders = leagueleaders.LeagueLeaders(
+            season=season_id if season_id else "", 
+            season_type_all_star="Regular Season"
+        )
+        df = leaders.get_data_frames()[0]
+        print(df.columns)
+    except Exception as e:
+        return None, "Error getting stats"
+    
+    if stat == "fg%":
+        df=df[df["FGM"] > 150]
+    elif stat == "3p%":
+        df=df[df["FG3M"] > 82]
+    elif stat == "ft%":
+        df=df[df["FTM"] > 150]
+
+    # Process DataFrame
+    if stat in league_stats:
+        base_column = league_stats[stat]
+        df = df[df["GP"] > 0]
+        
+        if stat in per_game_stats:
+            per_game_column = per_game_stats[stat]
+            df.loc[:, per_game_column] = df[base_column] / df["GP"]
+            sort_column = per_game_column
+        else:
+            sort_column = base_column
+
+        df = df.sort_values(by=sort_column, ascending=False).head(10)
+
+    else:
+        # Percentage stats
+        sort_column = pct_stats[stat]
+        df = df.sort_values(by=sort_column, ascending=False).head(10)
+
+    # Format results
+    results = []
+    for rank, (_, row) in enumerate(df.iterrows(), start=1):
+        player = row['PLAYER']
+        value = row[sort_column]
+        displayed_stat = stat_display_names.get(stat, stat.upper())
+        if stat in pct_stats and isinstance(value, (int, float)):
+            value *= 100
+        formatted_value = f"{value:.1f}" if isinstance(value, (int, float)) else str(value)
+        results.append(f"{rank}. {player} - {displayed_stat}: {formatted_value}")
+
+    return "\n".join(results), None
+
+
+async def charlimit(ctx, message: str):
+    if not message:
+        await ctx.send("No data to display.")
+        return
+
+    if len(message) > 1900:
+        chunks = [message[i:i+1900] for i in range(0, len(message), 1900)]
+        for chunk in chunks:
+            await ctx.send(f"```{chunk}```")
+    else:
+        await ctx.send(f"```{message}```")
+
+
 # Discord Bot Setup
 intents = discord.Intents.default()
 intents.message_content = True
@@ -175,16 +299,34 @@ async def commands(ctx):
         "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2025\n"
         "!teamroster     - Show the roster for a team. Format: !teamroster Lakers 2025"
         "!compare        - Compare 2 separate players' stats. Format: !compare Michael Jordan, LeBron James\n"
-        "!leagueleaders  - Show the league's top 10 leaders in a stat. Format: !leagueleaders Assists 2025\n"
-        "!alltimeleaders - Show the all-time leaders for a stat. Format: !alltimeleaders Points"
+        "!leaders        - Show the league's top 10 leaders in a stat. Format: !leaders Assists 2025\n"
+        "!alltime        - Show the all-time leaders for a stat. Format: !alltime Points"
+        "!randomplayer   - Generates a random NBA player. Format: !randomplayer 2016"
         "```"
-        "\n**Note:** If no year is added, the default will be career-based."
+        "\n**Note:** If no year is added, the default will be all time."
     )
     await ctx.send(help_text)
+# !commands
+@bot.command(name = 'stathelp')
+async def commands(ctx):
+    stathelp_text = (
+        "```"
+        "Here's a list of valid stats:\n\n"
+        "Points     - View the league leaders in Points per Game"
+        "Assists    - View the league leaders in Assists per Game"
+        "Rebounds   - View the league leaders in Rebounds per Game"
+        "Blocks     - View the league leaders in Blocks per Game"
+        "Steals     - View the league leaders in Steals per Game"
+        "Turnovers  - View the league leaders in Turnovers per Game"
+        "FG%        - View the league leaders in Shooting Efficiency"
+        "3PM        - View the league leaders in 3 Pointers Made per Game"
+        "3P%        - View the league leaders in 3 Point Percentage"
+        "FT%        - View the league leaders in Free Throw Percentage"
+        "Minutes    - View the league leaders in Minutes per Game"
+        "```"
+    )
+    await ctx.send(stathelp_text)
 
-#use re.match to take the last 2 digits of the year row in the data, add "20" + shortened year if under 40. If over 40, add "19". somehow combine those two digits and match them in the user input year to correlate the year
-
-# !playerstats
 @bot.command(name='playerstats')
 async def playerstats(ctx, *, args: str):
     parts = args.rsplit(maxsplit=1)
@@ -202,16 +344,7 @@ async def playerstats(ctx, *, args: str):
 
     stats, error = get_player_career_stats(player_name, season)
 
-    if error:
-        await ctx.send(error)
-        return
-
-    if len(stats) > 1900:
-        stats_chunks = [stats[i:i+1900] for i in range(0, len(stats), 1900)]
-        for chunk in stats_chunks:
-            await ctx.send(f"```{chunk}```")
-    else:
-        await ctx.send(f"```{stats}```")
+    await charlimit(ctx, stats)
 
 # !teamstats
 @bot.command(name = 'teamstats')
@@ -231,24 +364,35 @@ async def teamstats(ctx, *, args: str):
 
     stats, error = get_team_stats(team_name, season)
 
-    if error: 
-        await ctx.send(error)
-        return
-
-    if len(stats) > 1900:
-        stats_chunks = [stats[i:i+1900] for i in range(0, len(stats), 1900)]
-        for chunk in stats_chunks:
-            await ctx.send(f"```{chunk}```")
-    else:
-        await ctx.send(f"```{stats}```")
+    await charlimit(ctx, stats)
 
 # !teamroster
 
 # !compare
 
-# !leagueleaders
+# !leaders
+@bot.command(name = 'leaders')
+async def leagueleadercmd(ctx, *, args: str):
+    parts = args.rsplit(maxsplit=1)
+    if re.match(r"\d{4}", parts[-1]):
+        stat = parts[0]
+        season = parts[-1]
+    else:
+        stat = args 
+        season = None
 
-# !alltimeleaders
+    if season:
+        await ctx.send(f"Getting stats for {stat} in {season}")
+    else:
+        await ctx.send(f"For all time stats, use !alltimeleaders")
+
+    stats, error = get_league_leaders(stat, season)
+
+    await charlimit(ctx, stats)
+
+# !alltime
+        
+# !shotchart
 
 # Run the bot with your Discord bot token
 print
