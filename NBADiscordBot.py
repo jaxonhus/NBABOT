@@ -2,18 +2,27 @@ import discord
 import pandas as pd
 import os
 import re
-import csv
+import random
+from discord import Option
 from discord.ext import commands
 from nba_api.stats.static import *
 from nba_api.stats.endpoints import *
 from dotenv import load_dotenv
-
 
 pd.set_option('display.max_columns', 500)
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
 
+#slash commands implementation
+intents = discord.Intents.default()
+intents.message_content = True
+
+bot = discord.Bot(intents=intents)
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
 
 def get_player_id(player_name):
     player_dict = players.find_players_by_full_name(player_name)
@@ -21,6 +30,7 @@ def get_player_id(player_name):
         return None
     return player_dict[0]['id']
 
+#Function for converting xxxx-xx to xxxx
 def season_to_year(season: str) -> str:
     if not re.match(r"^\d{4}$", season):
         return None
@@ -29,20 +39,24 @@ def season_to_year(season: str) -> str:
     end_year_short = str(full_year)[-2:]
     return f"{start_year}-{end_year_short}"
 
-def get_player_career_stats(player_name, season = None):
+#For /playerstats https://github.com/swar/nba_api/blob/master/src/nba_api/stats/endpoints/playercareerstats.py
+def get_player_stats(player_name, season = None):
     player_id = get_player_id(player_name)
     if not player_id:
         return None, f"Could not find {player_name}"
 
-    career = playercareerstats.PlayerCareerStats(player_id=player_id)
-    df = career.get_data_frames()[0]
-    df = df.sort_values(by='SEASON_ID')
+    try:
+        career = playercareerstats.PlayerCareerStats(player_id=player_id)
+        df = career.get_data_frames()[0]
+        df = df.sort_values(by='SEASON_ID')
+    except Exception:
+        return None, f"Exception error, could not retrieve information"
 
     if season:
         season = season_to_year(season)
         df = df[df['SEASON_ID'] == season]
         if df.empty:
-            return None, f"Could not find stats for {player_name} in {season}. Format: !playerstats Lebron James 2025"
+            return None, f"Could not find stats for {player_name} in {season}. Format: /playerstats Lebron James 2025"
 
     # Collect stats strings per season
     stats_strings = []
@@ -61,35 +75,43 @@ def get_player_career_stats(player_name, season = None):
         pfpg = round(row['PF'] / games, 1)
         fgmpg = round(row['FGM'] / games, 1)
         fg3mpg = round(row['FG3M'] / games, 1)
-
-        stats_strings.append(
+        if season:
+            stats_strings.append(
+                f"{team_abbr} {seasonId}: GP: {games}, PPG: {ppg}, RPG: {rpg}, APG: {apg}, BPG: {bpg}, SPG: {spg}, TO: {tovpg}, PF: {pfpg}, FGM: {fgmpg} 3PM: {fg3mpg}"
+            )
+        else:
+            stats_strings.append(
             f"{team_abbr} {seasonId}: GP: {games}, PPG: {ppg}, RPG: {rpg}, APG: {apg}, BPG: {bpg}, SPG: {spg}, TO: {tovpg}, PF: {pfpg}, FGM: {fgmpg} 3PM: {fg3mpg}"
         )
 
-    # Join all seasons stats in one string with line breaks
     full_stats = "\n".join(stats_strings)
     return full_stats, None
 
+#Function to grab Team ID in API
 def get_team_id(team_name):
     team_dict = teams.find_teams_by_nickname(team_name)
     if not team_dict:
         return None
     return team_dict[0]['id']
 
+#For /teamstats
 def get_team_stats(team_name, season = None):
     team_id = get_team_id(team_name)
     if not team_id:
-        return None, f"Could not find the {team_name}, format: !teamstats Lakers 2025"
+        return None, f"Could not find the {team_name}, format: /teamstats Lakers 2025"
 
-    career = teamyearbyyearstats.TeamYearByYearStats(team_id=team_id)
-    df = career.get_data_frames()[0]
-    df = df.sort_values(by='YEAR')
+    try:
+        career = teamyearbyyearstats.TeamYearByYearStats(team_id=team_id)
+        df = career.get_data_frames()[0]
+        df = df.sort_values(by='YEAR')
+    except Exception:
+        return None, f"Exception error, could not retrieve information"
 
     if season:
         season = season_to_year(season)
         df = df[df['YEAR'] == season]
         if df.empty:
-            return None, f"Could not find stats for {team_name} in {season}. Format: !teamstats Lakers 2025"
+            return None, f"Could not find stats for {team_name} in {season}. Format: /teamstats Lakers 2025"
 
     stats_strings = []
     for index, row in df.iterrows():
@@ -102,7 +124,6 @@ def get_team_stats(team_name, season = None):
         win_pct = row['WIN_PCT']
         po_wins = row['PO_WINS']
         po_losses = row['PO_LOSSES']
-        finals_app = row['NBA_FINALS_APPEARANCE']
         ppg = round(row['PTS'] / games, 1)
         rpg = round(row['REB'] / games, 1)
         apg = round(row['AST'] / games, 1)
@@ -141,6 +162,7 @@ def get_team_stats(team_name, season = None):
     full_stats = "\n".join(stats_strings)
     return full_stats, None
 
+#League leaders function
 def get_league_leaders(stat: str, season: str = None):
     stat = stat.lower()
     
@@ -195,12 +217,10 @@ def get_league_leaders(stat: str, season: str = None):
         "minutes": "MIN"
     }
 
-    # Validate stat
     valid_stats = set(league_stats) | set(per_game_stats) | set(pct_stats)
     if stat not in valid_stats:
-        return None, f"Invalid stat, use !stathelp to view valid stats."
+        return None, f"Invalid stat, use /stathelp to view valid stats."
 
-    # Convert season to season_id
     season_id = None
     if season:
         season_id = season_to_year(season)
@@ -214,7 +234,7 @@ def get_league_leaders(stat: str, season: str = None):
         )
         df = leaders.get_data_frames()[0]
         print(df.columns)
-    except Exception as e:
+    except Exception:
         return None, "Error getting stats"
     
     if stat == "fg%":
@@ -224,7 +244,6 @@ def get_league_leaders(stat: str, season: str = None):
     elif stat == "ft%":
         df=df[df["FTM"] > 150]
 
-    # Process DataFrame
     if stat in league_stats:
         base_column = league_stats[stat]
         df = df[df["GP"] > 0]
@@ -256,59 +275,88 @@ def get_league_leaders(stat: str, season: str = None):
 
     return "\n".join(results), None
 
+#For /roster
+def get_team_roster(team_name, season = None):
+    team_id = get_team_id(team_name)
+    if not team_id:
+        return None, f"Could not find the {team_name}, format: /teamstats Lakers 2025"
+    if not season:
+        return None, f"A season is required for this command. Eg. 2025"
 
+    try:
+        roster = commonteamroster.CommonTeamRoster(team_id=team_id, season=season)
+        df = roster.get_data_frames()[0]
+        coach_info = roster.get_data_frames()[1]
+    except Exception:
+        return None, f"Exception error, could not retrieve information for {team_name}"
+    
+    if df.empty:
+        return None, f"No roster found for {team_name} in {season}."
+        
+    coach = coach_info.iloc[0]["COACH_NAME"] if not coach_info.empty else "No Coach Found"
+
+    stats_strings = [f"Roster for the {season} {team_name} - Coach: {coach}\n"]
+    for index, row in df.iterrows():
+        player = row["PLAYER"]
+        num = row["NUM"]
+        pos = row["POSITION"]
+        age = round(row["AGE"])
+        height = row["HEIGHT"]
+        weight = row["WEIGHT"]
+        stats_strings.append(f"#{num} {player} - {pos}, Age: {age}, {height}, {weight} lbs")
+
+    full_stats = "\n".join(stats_strings)
+    return full_stats, None
+
+#Character limit function
 async def charlimit(ctx, message: str):
     if not message:
-        await ctx.send("No data to display.")
+        await ctx.respond("No data to display.")
         return
 
     if len(message) > 1900:
         chunks = [message[i:i+1900] for i in range(0, len(message), 1900)]
         for chunk in chunks:
-            await ctx.send(f"```{chunk}```")
+            await ctx.respond(f"```{chunk}```")
     else:
-        await ctx.send(f"```{message}```")
+        await ctx.respond(f"```{message}```")
 
+# /greet
+@bot.slash_command(name="greet", description="Say hello to the bot!")
+async def greet(ctx):
+    greetings = [
+        "Hey there, ",
+        "Hello, ",
+        "G'Day, ",
+        "Whats up, ",
+        "How's it going, ",
+        "Yo, "
+    ]
+    response = random.choice(greetings)
+    await ctx.respond(f"{response}{ctx.author.mention}!")
 
-# Discord Bot Setup
-intents = discord.Intents.default()
-intents.message_content = True
-
-bot = commands.Bot(command_prefix='!', intents=intents)
-
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
-
-# !hi
-@bot.command(name = 'hi')
-async def hi(ctx):
-    hi_text = (
-        f"Hello {ctx.author}, this is the 12th code update!"
-    )
-    await ctx.send(hi_text)
-
-# !commands
-@bot.command(name = 'commands')
-async def commands(ctx):
+# /commands
+@bot.slash_command(name = 'commands', description = "Show a list of available commands")
+async def commandlist(ctx):
     help_text = (
         "```"
         "Here's a list of commands:\n\n"
-        "!commands       - Show a list of all commands\n"
-        "!playerstats    - Show stats for a specific player. Format: !playerstats Anthony Edwards 2025\n"
-        "!teamstats      - Show stats for a specific team.   Format: !teamstats Timberwolves 2025\n"
-        "!teamroster     - Show the roster for a team. Format: !teamroster Lakers 2025"
-        "!compare        - Compare 2 separate players' stats. Format: !compare Michael Jordan, LeBron James\n"
-        "!leaders        - Show the league's top 10 leaders in a stat. Format: !leaders Assists 2025\n"
-        "!alltime        - Show the all-time leaders for a stat. Format: !alltime Points"
-        "!randomplayer   - Generates a random NBA player. Format: !randomplayer 2016"
+        "/commands       - Show a list of all commands\n"
+        "/playerstats    - Show stats for a specific player. Format: /playerstats Anthony Edwards 2025\n"
+        "/teamstats      - Show stats for a specific team.   Format: /teamstats Timberwolves 2025\n"
+        "/roster         - Show the roster for a team. Format: /teamroster Lakers 2025"
+        "/compare        - Compare 2 separate players' stats. Format: /compare Michael Jordan, LeBron James\n"
+        "/leaders        - Show the league's top 10 leaders in a stat. Format: /leaders Assists 2025\n"
+        "/alltime        - Show the all-time leaders for a stat. Format: /alltime Points"
+        "/randomplayer   - Generates a random NBA player. Format: /randomplayer"
         "```"
         "\n**Note:** If no year is added, the default will be all time."
     )
-    await ctx.send(help_text)
-# !commands
-@bot.command(name = 'stathelp')
-async def commands(ctx):
+    await ctx.respond(help_text)
+
+# /stathelp
+@bot.slash_command(name = 'stathelp', description = "Show valid stats you can search for")
+async def stathelp(ctx):
     stathelp_text = (
         "```"
         "Here's a list of valid stats:\n\n"
@@ -325,53 +373,72 @@ async def commands(ctx):
         "Minutes    - View the league leaders in Minutes per Game"
         "```"
     )
-    await ctx.send(stathelp_text)
+    await ctx.respond(stathelp_text)
 
-@bot.command(name='playerstats')
-async def playerstats(ctx, *, args: str):
-    parts = args.rsplit(maxsplit=1)
-    if re.match(r"\d{4}", parts[-1]):
-        player_name = parts[0]
-        season = parts[-1]
-    else:
-        player_name = args 
-        season = None
+# /playerstats
+@bot.slash_command(name = 'playerstats', description = "Get stats for any NBA Player")
+async def playerstats(
+    ctx,
+    player: Option(str, description="Enter a Team (e.g. Lakers)"), # type: ignore
+    season: Option(str, description="Enter a season year (e.g. 2025)", required = False) # type: ignore
+):
+    await ctx.defer()
 
     if season:
-        await ctx.send(f"Getting stats for {player_name} in {season}")
+        await ctx.respond(f"Getting stats for **{player}** in _{season}_")
     else:
-        await ctx.send(f"Getting career stats for {player_name}")
+        await ctx.respond(f"Please input a season. Format: /teamstats {player} 2025")
 
-    stats, error = get_player_career_stats(player_name, season)
+    stats, error = get_player_stats(player, season)
 
-    await charlimit(ctx, stats)
+    if error:
+        await ctx.respond(error)
+    else:
+        await charlimit(ctx, stats)
 
-# !teamstats
-@bot.command(name = 'teamstats')
-async def teamstats(ctx, *, args: str):
+# /playerstats
+@bot.slash_command(name = 'teamstats', description = "Get stats for any NBA Team")
+async def teamstats(
+    ctx,
+    team: Option(str, description="Enter a Team (e.g. Lakers)"), # type: ignore
+    season: Option(str, description="Enter a season year (e.g. 2025)") # type: ignore
+):
+    await ctx.defer()
+
+    if season:
+        await ctx.respond(f"Getting stats for **{team}** in _{season}_")
+    else:
+        await ctx.respond(f"Please input a season. Format: /teamstats {team} 2025")
+
+    stats, error = get_team_stats(team, season)
+
+    if error:
+        await ctx.respond(error)
+    else:
+        await charlimit(ctx, stats)
+
+# /roster
+@bot.slash_command(name='roster')
+async def teamroster(ctx, *, args: str):
     parts = args.rsplit(maxsplit=1)
     if re.match(r"\d{4}", parts[-1]):
         team_name = parts[0]
         season = parts[-1]
     else:
-        team_name = args 
-        season = None
+        await ctx.respond("A season is required Eg. 2025")
+        return
 
-    if season:
-        await ctx.send(f"Getting stats for {team_name} in {season}")
+    stats, error = get_team_roster(team_name, season)
+
+    if error:
+        await ctx.respond(error)
     else:
-        await ctx.send(f"Please input a season. Format: !teamstats {team_name} 2025")
+        await charlimit(ctx, stats)
+    
+# /compare
 
-    stats, error = get_team_stats(team_name, season)
-
-    await charlimit(ctx, stats)
-
-# !teamroster
-
-# !compare
-
-# !leaders
-@bot.command(name = 'leaders')
+# /leaders
+@bot.slash_command(name = 'leaders')
 async def leagueleadercmd(ctx, *, args: str):
     parts = args.rsplit(maxsplit=1)
     if re.match(r"\d{4}", parts[-1]):
@@ -382,20 +449,20 @@ async def leagueleadercmd(ctx, *, args: str):
         season = None
 
     if season:
-        await ctx.send(f"Getting stats for {stat} in {season}")
+        await ctx.respond(f"Getting leaders for {stat} in {season}")
     else:
-        await ctx.send(f"For all time stats, use !alltimeleaders")
+        await ctx.respond(f"Please input a season. Eg. 2025")
 
     stats, error = get_league_leaders(stat, season)
 
-    await charlimit(ctx, stats)
+    if error:
+        await ctx.respond(error)
+    else:
+        await charlimit(ctx, stats)
 
-# !alltime
-        
-# !shotchart
+# /alltime
 
 # Run the bot with your Discord bot token
-print
 if token:
     bot.run(token)
 else: 
