@@ -5,6 +5,7 @@ import re
 import random
 from discord import Option
 from discord.ext import commands
+from nba_api.stats.library.http import NBAStatsHTTP
 from nba_api.stats.static import *
 from nba_api.stats.endpoints import *
 from dotenv import load_dotenv
@@ -275,28 +276,37 @@ def get_league_leaders(stat: str, season: str = None):
 
     return "\n".join(results), None
 
-#For /roster
-def get_team_roster(team_name, season = None):
+from nba_api.stats.endpoints import commonteamroster
+
+from nba_api.stats.endpoints import commonteamroster
+
+def get_team_roster(team_name, season=None):
     team_id = get_team_id(team_name)
     if not team_id:
         return None, f"Could not find the {team_name}, format: /teamstats Lakers 2025"
-    if not season:
-        return None, f"A season is required for this command. Eg. 2025"
+
+    try:
+        season = season_to_year(season)  # Format: "2024-25"
+    except ValueError as e:
+        return None, str(e)
 
     try:
         roster = commonteamroster.CommonTeamRoster(team_id=team_id, season=season)
-        df = roster.get_data_frames()[0]
-        coach_info = roster.get_data_frames()[1]
-    except Exception:
-        return None, f"Exception error, could not retrieve information for {team_name}"
-    
+
+        # SAFELY get player roster only
+        if hasattr(roster, 'common_team_roster'):
+            df = roster.common_team_roster.get_data_frame()
+        else:
+            return None, f"No roster data returned for {team_name} in {season}."
+
+    except Exception as e:
+        return None, f"Exception occurred while fetching roster: {str(e)}"
+
     if df.empty:
         return None, f"No roster found for {team_name} in {season}."
-        
-    coach = coach_info.iloc[0]["COACH_NAME"] if not coach_info.empty else "No Coach Found"
 
-    stats_strings = [f"Roster for the {season} {team_name} - Coach: {coach}\n"]
-    for index, row in df.iterrows():
+    stats_strings = [f"Roster for the {season} {team_name}\n"]
+    for _, row in df.iterrows():
         player = row["PLAYER"]
         num = row["NUM"]
         pos = row["POSITION"]
@@ -305,8 +315,9 @@ def get_team_roster(team_name, season = None):
         weight = row["WEIGHT"]
         stats_strings.append(f"#{num} {player} - {pos}, Age: {age}, {height}, {weight} lbs")
 
-    full_stats = "\n".join(stats_strings)
-    return full_stats, None
+    return "\n".join(stats_strings), None
+
+
 
 #Character limit function
 async def charlimit(ctx, message: str):
@@ -319,7 +330,7 @@ async def charlimit(ctx, message: str):
         for chunk in chunks:
             await ctx.respond(f"```{chunk}```")
     else:
-        await ctx.respond(f"```{message}```")
+        await ctx.send(f"```{message}```")
 
 # /greet
 @bot.slash_command(name="greet", description="Say hello to the bot!")
@@ -359,7 +370,7 @@ async def commandlist(ctx):
 async def stathelp(ctx):
     stathelp_text = (
         "```"
-        "Here's a list of valid stats:\n\n"
+        "**Here's a list of valid stats:**\n\n"
         "Points     - View the league leaders in Points per Game"
         "Assists    - View the league leaders in Assists per Game"
         "Rebounds   - View the league leaders in Rebounds per Game"
@@ -387,7 +398,7 @@ async def playerstats(
     if season:
         await ctx.respond(f"Getting stats for **{player}** in _{season}_")
     else:
-        await ctx.respond(f"Please input a season. Format: /teamstats {player} 2025")
+        await ctx.respond(f"Getting career stats for **{player}**")
 
     stats, error = get_player_stats(player, season)
 
@@ -396,7 +407,7 @@ async def playerstats(
     else:
         await charlimit(ctx, stats)
 
-# /playerstats
+# /teamstats
 @bot.slash_command(name = 'teamstats', description = "Get stats for any NBA Team")
 async def teamstats(
     ctx,
@@ -406,9 +417,10 @@ async def teamstats(
     await ctx.defer()
 
     if season:
-        await ctx.respond(f"Getting stats for **{team}** in _{season}_")
+        await ctx.respond(f"Getting stats for the **{team}** in _{season}_")
     else:
-        await ctx.respond(f"Please input a season. Format: /teamstats {team} 2025")
+        season = str(2025)
+        await ctx.respond(f"Getting last seasons stats for the **{team}**")
 
     stats, error = get_team_stats(team, season)
 
@@ -418,40 +430,44 @@ async def teamstats(
         await charlimit(ctx, stats)
 
 # /roster
-@bot.slash_command(name='roster')
-async def teamroster(ctx, *, args: str):
-    parts = args.rsplit(maxsplit=1)
-    if re.match(r"\d{4}", parts[-1]):
-        team_name = parts[0]
-        season = parts[-1]
-    else:
-        await ctx.respond("A season is required Eg. 2025")
-        return
+'''
+@bot.slash_command(name = 'roster', description = "Get any NBA roster")
+async def roster(
+    ctx,
+    team: Option(str, description="Enter a Team (e.g. Lakers)"), # type: ignore
+    season: Option(str, description="Enter a season year (e.g. 2025)", required = False) # type: ignore
+):
+    await ctx.defer()
 
-    stats, error = get_team_roster(team_name, season)
+    if season:
+        await ctx.respond(f"Getting roster for the **{team}** in _{season}_")
+    else:
+        season = str(2025)
+        await ctx.respond(f"Getting the current roster for the **{team}** ")
+
+    stats, error = get_team_roster(team, season)
 
     if error:
-        await ctx.respond(error)
+        await ctx.send(error)
     else:
         await charlimit(ctx, stats)
-    
+    '''
 # /compare
 
 # /leaders
-@bot.slash_command(name = 'leaders')
-async def leagueleadercmd(ctx, *, args: str):
-    parts = args.rsplit(maxsplit=1)
-    if re.match(r"\d{4}", parts[-1]):
-        stat = parts[0]
-        season = parts[-1]
-    else:
-        stat = args 
-        season = None
+@bot.slash_command(name = 'leaders', description = "Get the league leaders for any stat. (/stathelp for available stats)")
+async def teamstats(
+    ctx,
+    stat: Option(str, description="Enter a stat (e.g. Points)"), # type: ignore
+    season: Option(str, description="Enter a season year (e.g. 2025)", required = False) # type: ignore
+):
+    await ctx.defer()
 
     if season:
-        await ctx.respond(f"Getting leaders for {stat} in {season}")
+        await ctx.respond(f"Getting leaders for **{stat}** in _{season}_")
     else:
-        await ctx.respond(f"Please input a season. Eg. 2025")
+        season = str(2025)
+        await ctx.respond(f"Getting the current season leaders for _{stat}_")
 
     stats, error = get_league_leaders(stat, season)
 
@@ -461,7 +477,7 @@ async def leagueleadercmd(ctx, *, args: str):
         await charlimit(ctx, stats)
 
 # /alltime
-
+        
 # Run the bot with your Discord bot token
 if token:
     bot.run(token)
