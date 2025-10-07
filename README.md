@@ -1,11 +1,11 @@
-# 🏀 NBA Discord Bot
+# NBA Discord Bot 🏀 
 
 A Discord bot that provides real-time NBA stats, team rosters, and league leaders!
 Built with **Python**, **discord.py**, and **asyncio**, this bot supports fully interactive slash commands with arrow-button navigation for browsing multiple seasons.
 
 ---
 
-## 🚀 Features
+## Features
 
 - **/playerstats** — View season-by-season stats for any NBA player  
 - **/teamstats** — View team stats and playoff results for any year  
@@ -19,7 +19,7 @@ Built with **Python**, **discord.py**, and **asyncio**, this bot supports fully 
 
 ---
 
-## 🧩 Requirements
+## Requirements
 
 - Python 3.10+  
 - Discord bot token (from [Discord Developer Portal](https://discord.com/developers/applications))  
@@ -27,7 +27,7 @@ Built with **Python**, **discord.py**, and **asyncio**, this bot supports fully 
 
 ---
 
-## ⚙️ Installation
+## Installation
 
 1. **Clone or download** this repository:
    ```bash
