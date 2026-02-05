@@ -31,5 +31,5 @@ Built with **Python**, **discord.py**, and **asyncio**, this bot supports fully 
 
 1. **Clone or download** this repository:
    ```bash
-   git clone https://github.com/<your-username>/<your-repo-name>.git
-   cd <your-repo-name>
+   git clone https://github.com/jaxonhus/NBABOT.git
+   cd NBABOT
